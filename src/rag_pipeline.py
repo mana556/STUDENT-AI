@@ -1,5 +1,7 @@
 def generate_answer(query, retriever, llm):
-    docs = retriever.get_relevant_documents(query)
+    docs = retriever.invoke(query)
+    if isinstance(docs, dict):
+        docs = docs.get("output", [])
 
     context = "\n".join([doc.page_content for doc in docs])
 
