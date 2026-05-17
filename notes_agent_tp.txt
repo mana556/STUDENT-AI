@@ -1,0 +1,8 @@
+Le RAG combine la recherche d'information et la génération de texte.
+Un agent IA peut choisir un outil selon l'objectif à atteindre.
+PromptTemplate permet de construire un prompt dynamique avec des variables.
+Groq est utilisé ici comme modèle de raisonnement.
+MCP est une méthode pour structurer les prompts de modèle.
+OpenClaw est un outil no-code pour automatisations.
+n8n permet de connecter des APIs avec des workflows.
+Le fichier local de notes sert de base de connaissances accessible.

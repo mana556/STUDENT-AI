@@ -1,5 +1,8 @@
 streamlit
 langchain
+langchain-core
+langchain-groq
+python-dotenv
 faiss-cpu
 pypdf
 tiktoken

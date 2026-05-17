@@ -7,13 +7,14 @@ from src.retriever import get_retriever
 from src.llm import get_llm
 from src.rag_pipeline import generate_answer
 from src.quiz_generator import generate_quiz, parse_quiz_output
+from agent_etudiant_tp import run_agent as run_study_agent
 
 st.set_page_config(page_title="AI Student Assistant", page_icon="🎓", layout="wide")
 
 st.markdown(
     """
     <style>
-    .stApp { background: linear-gradient(180deg, #eef2ff 0%, #ffffff 100%); }
+     .stApp { background: linear-gradient(180deg, #eef2ff 0%, #ffffff 100%); }
     .stButton>button { background-color: #4b7bec; color: white; border-radius: 8px; border: none; }
     .stButton>button:hover { background-color: #3867d6; }
     .stTextInput>div>div>input { border-radius: 12px; border: 1px solid #d0d7ff; padding: 10px; }
@@ -45,6 +46,8 @@ if "pdf_loaded" not in st.session_state:
     st.session_state.embeddings = None
     st.session_state.llm = None
     st.session_state.store_type = "faiss"  # Vector store type
+    st.session_state.agent_response = None
+    st.session_state.agent_query = ""
 
 
 def reset_quiz_state():
@@ -149,7 +152,7 @@ with st.sidebar:
 
 # PAGE NAVIGATION
 if st.session_state.pdf_loaded:
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("🏠 Home", use_container_width=True):
             st.session_state.page = "home"
@@ -159,6 +162,9 @@ if st.session_state.pdf_loaded:
     with col3:
         if st.button("📝 Take Quiz", use_container_width=True):
             st.session_state.page = "quiz"
+    with col4:
+        if st.button("🤖 Agent", use_container_width=True):
+            st.session_state.page = "agent"
     st.markdown("---")
 
 
@@ -343,4 +349,69 @@ elif st.session_state.page == "quiz":
 
         if st.button("🔄 Try Another Quiz", use_container_width=True, key="reset_quiz"):
             reset_quiz_state()
+            st.rerun()
+
+
+# ============ AGENT PAGE ============
+elif st.session_state.page == "agent":
+    st.markdown("## 🤖 Study Agent")
+    st.markdown("Ask your study agent for help. It can:\n- **Calculate averages** from test scores\n- **Search your notes** for specific topics\n- **Generate revision plans** for any subject")
+
+    agent_input = st.text_input(
+        "Ask your study agent:",
+        value=st.session_state.agent_query,
+        key="agent_input",
+        placeholder="e.g., 'Calculate the average of [12, 15, 9]' or 'Search for RAG in notes'"
+    )
+
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button("💭 Send", use_container_width=True, key="send_agent"):
+            if not agent_input.strip():
+                st.warning("Please enter a question for the agent.")
+            else:
+                with st.spinner("Agent is thinking..."):
+                    try:
+                        response = run_study_agent(agent_input)
+                        st.session_state.agent_response = response
+                        st.session_state.agent_query = agent_input
+                    except Exception as e:
+                        st.error(f"Agent error: {e}")
+
+    if st.session_state.agent_response:
+        st.markdown("### Agent Response")
+        st.success(st.session_state.agent_response)
+
+    st.markdown("---")
+    st.markdown("### Example Queries")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("📊 Calculate [12, 15, 9]", use_container_width=True, key="example_calc"):
+            st.session_state.agent_query = "Calcule la moyenne de [12, 15, 9]."
+            with st.spinner("Agent is thinking..."):
+                try:
+                    response = run_study_agent(st.session_state.agent_query)
+                    st.session_state.agent_response = response
+                except Exception as e:
+                    st.error(f"Agent error: {e}")
+            st.rerun()
+    with col2:
+        if st.button("🔍 Search notes", use_container_width=True, key="example_search"):
+            st.session_state.agent_query = "Cherche le mot RAG dans mes notes."
+            with st.spinner("Agent is thinking..."):
+                try:
+                    response = run_study_agent(st.session_state.agent_query)
+                    st.session_state.agent_response = response
+                except Exception as e:
+                    st.error(f"Agent error: {e}")
+            st.rerun()
+    with col3:
+        if st.button("📚 Revision plan", use_container_width=True, key="example_revision"):
+            st.session_state.agent_query = "Prépare-moi un plan de révision sur les agents IA."
+            with st.spinner("Agent is thinking..."):
+                try:
+                    response = run_study_agent(st.session_state.agent_query)
+                    st.session_state.agent_response = response
+                except Exception as e:
+                    st.error(f"Agent error: {e}")
             st.rerun()

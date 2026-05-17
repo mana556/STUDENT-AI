@@ -15,7 +15,7 @@ def _load_dotenv():
             continue
         key, sep, value = line.partition("=")
         if sep and key:
-            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+            os.environ[key.strip()] = value.strip().strip('"').strip("'")
 
 
 def _get_groq_settings():
@@ -39,8 +39,9 @@ class GroqChatClient:
         self.temperature = temperature
 
     def predict(self, prompt: str) -> str:
-        if self.base_url.endswith("/openai/v1"):
-            url = f"{self.base_url}/chat/completions"
+        normalized_base = self.base_url.rstrip("/")
+        if normalized_base.endswith("/openai/v1"):
+            url = f"{normalized_base}/chat/completions"
             payload = {
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
@@ -48,7 +49,7 @@ class GroqChatClient:
                 "max_tokens": 512,
             }
         else:
-            url = f"{self.base_url}/completions"
+            url = f"{normalized_base}/completions"
             payload = {
                 "model": self.model,
                 "input": prompt,
