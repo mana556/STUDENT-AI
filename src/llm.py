@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from pathlib import Path
 
@@ -44,6 +45,7 @@ class GroqChatClient:
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": self.temperature,
+                "max_tokens": 512,
             }
         else:
             url = f"{self.base_url}/completions"
@@ -59,23 +61,40 @@ class GroqChatClient:
             "Content-Type": "application/json",
         }
 
-        response = requests.post(url, json=payload, headers=headers, timeout=120)
-        try:
-            response.raise_for_status()
-        except requests.exceptions.HTTPError as exc:
-            raise RuntimeError(
-                f"Groq API request failed {response.status_code} at {url}: {response.text}"
-            ) from exc
+        max_retries = 3
+        backoff_seconds = 1.0
+        for attempt in range(1, max_retries + 1):
+            response = requests.post(url, json=payload, headers=headers, timeout=120)
+            if response.status_code == 429:
+                if attempt == max_retries:
+                    break
+                retry_after = response.headers.get("Retry-After")
+                if retry_after is not None and retry_after.isdigit():
+                    backoff_seconds = max(backoff_seconds, float(retry_after))
+                time.sleep(backoff_seconds)
+                backoff_seconds *= 2
+                continue
 
-        result = response.json()
-        if "choices" not in result or not result["choices"]:
-            raise RuntimeError(f"Invalid Groq response: {result}")
+            try:
+                response.raise_for_status()
+            except requests.exceptions.HTTPError as exc:
+                raise RuntimeError(
+                    f"Groq API request failed {response.status_code} at {url}: {response.text}"
+                ) from exc
 
-        text = result["choices"][0].get("text") or result["choices"][0].get("message", {}).get("content")
-        if text is None:
-            raise RuntimeError(f"Unexpected Groq completion payload: {result}")
+            result = response.json()
+            if "choices" not in result or not result["choices"]:
+                raise RuntimeError(f"Invalid Groq response: {result}")
 
-        return text.strip()
+            text = result["choices"][0].get("text") or result["choices"][0].get("message", {}).get("content")
+            if text is None:
+                raise RuntimeError(f"Unexpected Groq completion payload: {result}")
+
+            return text.strip()
+
+        raise RuntimeError(
+            f"Groq API request failed {response.status_code} at {url}: {response.text}"
+        )
 
 
 def get_llm():
