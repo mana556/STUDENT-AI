@@ -2,7 +2,7 @@
 from src.loader import load_pdf
 from src.chunking import split_documents
 from src.embeddings import get_embeddings
-from src.vector_store import create_vector_store
+from src.vector_store import create_vector_store, load_vector_store
 from src.retriever import get_retriever
 from src.llm import get_llm
 from src.rag_pipeline import generate_answer
@@ -44,6 +44,7 @@ if "pdf_loaded" not in st.session_state:
     st.session_state.retriever = None
     st.session_state.embeddings = None
     st.session_state.llm = None
+    st.session_state.store_type = "faiss"  # Vector store type
 
 
 def reset_quiz_state():
@@ -55,18 +56,61 @@ def reset_quiz_state():
     st.session_state.quiz_feedback = []
 
 
-def build_quiz_context(chunks, max_total_chars=600, max_chunks=1, max_chars_per_chunk=600):
+def build_quiz_context(chunks, max_total_chars=400, max_chunks=1, max_chars_per_chunk=400):
     """Build minimal context for quiz to avoid 413 errors."""
-    if not chunks:
-        return ""
-    text = chunks[0].page_content.strip()[:max_chars_per_chunk]
-    return text
+    if chunks:
+        text = chunks[0].page_content.strip()[:max_chars_per_chunk]
+        return text
+
+    # If no chunks available, try to pull from a loaded retriever
+    retriever = st.session_state.get("retriever")
+    if retriever:
+        try:
+            docs = retriever.get_relevant_documents("summary")
+            if docs:
+                return docs[0].page_content.strip()[:max_chars_per_chunk]
+        except Exception:
+            pass
+
+    return ""
 
 
 # SIDEBAR: PDF Upload
 with st.sidebar:
     st.subheader("📄 Document Upload")
+    
+    # Vector store selector
+    st.session_state.store_type = st.radio(
+        "Vector Store:",
+        ["faiss", "chroma"],
+        horizontal=True,
+        help="FAISS: Fast, memory-based. Chroma: Persistent, lightweight."
+    )
+    # Option to load an already-built store from disk
+    if st.button("📥 Load existing store", key="load_store"):
+        with st.spinner("Loading store..."):
+            embeddings = get_embeddings()
+            try:
+                if st.session_state.store_type == "chroma":
+                    db = load_vector_store("embeddings/chroma_db", embeddings, store_type="chroma")
+                else:
+                    db = load_vector_store("embeddings/faiss_index", embeddings, store_type="faiss")
+
+                retriever = get_retriever(db, search_k=20)
+                llm = get_llm()
+
+                st.session_state.embeddings = embeddings
+                st.session_state.retriever = retriever
+                st.session_state.llm = llm
+                # Mark as 'loaded' so navigation and features are available
+                st.session_state.pdf_loaded = True
+                st.session_state.uploaded_file_name = f"Loaded {st.session_state.store_type.upper()} store"
+                st.success(f"Loaded existing {st.session_state.store_type.upper()} store")
+            except Exception as e:
+                st.error(f"Could not load store: {e}")
+
     uploaded_file = st.file_uploader("Upload PDF", type="pdf")
+    append_to_store = st.checkbox("Append to existing store", value=False, help="If checked, new PDF contents will be added to the selected vector store instead of replacing it.")
 
     if uploaded_file:
         if not st.session_state.pdf_loaded or st.session_state.uploaded_file_name != uploaded_file.name:
@@ -78,7 +122,12 @@ with st.sidebar:
                 chunks = split_documents(docs)
 
                 embeddings = get_embeddings()
-                db = create_vector_store(chunks, embeddings)
+                db = create_vector_store(
+                    chunks,
+                    embeddings,
+                    store_type=st.session_state.store_type,
+                    append=append_to_store,
+                )
                 retriever = get_retriever(db, search_k=20)
                 llm = get_llm()
 
@@ -92,10 +141,10 @@ with st.sidebar:
                 st.session_state.answer = None
                 st.session_state.sources = []
                 reset_quiz_state()
-            st.success(f"✓ Loaded: {uploaded_file.name}")
+            st.success(f"✓ Loaded: {uploaded_file.name} ({st.session_state.store_type.upper()})")
 
     if st.session_state.pdf_loaded:
-        st.info(f"**Current PDF:** {st.session_state.uploaded_file_name}")
+        st.info(f"**Current PDF:** {st.session_state.uploaded_file_name}\n**Store:** {st.session_state.store_type.upper()}")
 
 
 # PAGE NAVIGATION
@@ -150,19 +199,36 @@ elif st.session_state.page == "questions":
     col1, col2 = st.columns([1, 4])
     with col1:
         if st.button("📤 Send Question", use_container_width=True, key="send_question"):
-            if query_input.strip():
-                with st.spinner("Finding answer..."):
-                    answer, sources = generate_answer(
-                        query_input,
-                        st.session_state.retriever,
-                        st.session_state.llm,
-                        embeddings=st.session_state.embeddings,
-                    )
-                    st.session_state.answer = answer
-                    st.session_state.sources = sources
-                    st.session_state.query_text = query_input
-            else:
+            if not query_input.strip():
                 st.warning("Please enter a question")
+            else:
+                # Ensure retriever & llm available; try to auto-load store if missing
+                if not st.session_state.get("retriever"):
+                    with st.spinner("Loading existing store..."):
+                        try:
+                            embeddings = get_embeddings()
+                            if st.session_state.store_type == "chroma":
+                                db = load_vector_store("embeddings/chroma_db", embeddings, store_type="chroma")
+                            else:
+                                db = load_vector_store("embeddings/faiss_index", embeddings, store_type="faiss")
+                            st.session_state.retriever = get_retriever(db, search_k=20)
+                            st.session_state.embeddings = embeddings
+                            st.session_state.llm = get_llm()
+                        except Exception as e:
+                            st.error(f"No vector store available: {e}")
+                if not st.session_state.get("retriever"):
+                    st.warning("No vector store loaded. Upload a PDF or Load existing store first.")
+                else:
+                    with st.spinner("Finding answer..."):
+                        answer, sources = generate_answer(
+                            query_input,
+                            st.session_state.retriever,
+                            st.session_state.llm,
+                            embeddings=st.session_state.embeddings,
+                        )
+                        st.session_state.answer = answer
+                        st.session_state.sources = sources
+                        st.session_state.query_text = query_input
 
     if st.session_state.answer:
         st.markdown("### Answer")
@@ -179,11 +245,15 @@ elif st.session_state.page == "quiz":
     st.markdown("## 📝 Interactive Quiz")
     st.markdown("Test your knowledge with AI-generated quiz questions.")
 
+    topic_input = st.text_input("Enter a topic for the quiz (optional)", key="quiz_topic_input", placeholder="e.g., \"the history of artificial intelligence\"")
+
     if not st.session_state.quiz_data and not st.session_state.quiz_submitted:
         if st.button("🚀 Generate Quiz", use_container_width=True, key="create_quiz"):
             with st.spinner("Generating quiz..."):
                 context = build_quiz_context(st.session_state.chunks)
-                quiz_text = generate_quiz(context, st.session_state.llm)
+                if not st.session_state.get("llm"):
+                    st.session_state.llm = get_llm()
+                quiz_text = generate_quiz(context, st.session_state.llm, topic=topic_input)
                 quiz_data = parse_quiz_output(quiz_text)
                 if quiz_data:
                     st.session_state.quiz_data = quiz_data

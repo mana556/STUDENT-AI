@@ -6,3 +6,5 @@ tiktoken
 requests
 langchain-huggingface
 sentence-transformers
+chromadb
+langchain-chroma
