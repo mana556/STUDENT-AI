@@ -14,11 +14,14 @@ st.set_page_config(page_title="AI Student Assistant", page_icon="🎓", layout="
 st.markdown(
     """
     <style>
-     .stApp { background: linear-gradient(180deg, #eef2ff 0%, #ffffff 100%); }
-    .stButton>button { background-color: #4b7bec; color: white; border-radius: 8px; border: none; }
-    .stButton>button:hover { background-color: #3867d6; }
+    .stApp { background: linear-gradient(180deg, #eef2ff 0%, #ffffff 100%); }
+    .stButton>button { background-color: #4b7bec; color: white; border-radius: 8px; border: none; font-weight: 500; transition: all 0.2s ease; }
+    .stButton>button:hover { background-color: #3867d6; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(75, 123, 236, 0.3); }
     .stTextInput>div>div>input { border-radius: 12px; border: 1px solid #d0d7ff; padding: 10px; }
-    .stFileUploader>div { border-radius: 16px; border: 2px dashed #a3b1ff; background: #f5f7ff; }
+    .stTextArea>div>div>textarea { border-radius: 12px; border: 1px solid #d0d7ff; padding: 10px; }
+    .stFileUploader>div { border-radius: 16px; border: 2px dashed #a3b1ff; background: #f5f7ff; padding: 16px; }
+    .info-box { background: #f0f4ff; border-left: 4px solid #4b7bec; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
+    .subtitle-text { color: #4b5563; font-size: 16px; margin-top: -8px; margin-bottom: 20px; }
     .css-1d391kg { box-shadow: 0 10px 30px rgba(15, 23, 70, 0.08); }
     </style>
     """,
@@ -26,6 +29,12 @@ st.markdown(
 )
 
 st.title("🎓 AI Student Assistant")
+
+# Add subtitle
+st.markdown(
+    "<p class='subtitle-text'>A comprehensive study companion — upload documents, ask questions, generate quizzes, and use intelligent tools.</p>",
+    unsafe_allow_html=True,
+)
 
 # Initialize session state
 if "pdf_loaded" not in st.session_state:
@@ -48,6 +57,7 @@ if "pdf_loaded" not in st.session_state:
     st.session_state.store_type = "faiss"  # Vector store type
     st.session_state.agent_response = None
     st.session_state.agent_query = ""
+    st.session_state.agent_history = []  # Store past agent queries and responses
 
 
 def reset_quiz_state():
@@ -355,18 +365,22 @@ elif st.session_state.page == "quiz":
 # ============ AGENT PAGE ============
 elif st.session_state.page == "agent":
     st.markdown("## 🤖 Study Agent")
-    st.markdown("Ask your study agent for help. It can:\n- **Calculate averages** from test scores\n- **Search your notes** for specific topics\n- **Generate revision plans** for any subject")
+    st.markdown("Intelligent assistant with three powerful tools: calculate scores, search notes, and generate study plans.")
 
-    agent_input = st.text_input(
-        "Ask your study agent:",
-        value=st.session_state.agent_query,
-        key="agent_input",
-        placeholder="e.g., 'Calculate the average of [12, 15, 9]' or 'Search for RAG in notes'"
-    )
+    left_col, right_col = st.columns([2, 3])
 
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if st.button("💭 Send", use_container_width=True, key="send_agent"):
+    with left_col:
+        st.markdown("### Your Question")
+        agent_input = st.text_area(
+            "Ask your study agent:",
+            value=st.session_state.agent_query,
+            key="agent_input",
+            height=120,
+            placeholder="e.g., 'Calcule la moyenne de [12, 15, 9]' or 'Cherche RAG dans mes notes'",
+            label_visibility="collapsed",
+        )
+
+        if st.button("💭 Ask Agent", use_container_width=True, key="send_agent"):
             if not agent_input.strip():
                 st.warning("Please enter a question for the agent.")
             else:
@@ -375,43 +389,75 @@ elif st.session_state.page == "agent":
                         response = run_study_agent(agent_input)
                         st.session_state.agent_response = response
                         st.session_state.agent_query = agent_input
+                        st.session_state.agent_history.append((agent_input, response))
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Agent error: {e}")
 
-    if st.session_state.agent_response:
-        st.markdown("### Agent Response")
-        st.success(st.session_state.agent_response)
+        st.markdown("---")
+        st.markdown("### Quick Examples")
 
-    st.markdown("---")
-    st.markdown("### Example Queries")
-    col1, col2, col3 = st.columns(3)
-    with col1:
         if st.button("📊 Calculate [12, 15, 9]", use_container_width=True, key="example_calc"):
-            st.session_state.agent_query = "Calcule la moyenne de [12, 15, 9]."
+            q = "Calcule la moyenne de [12, 15, 9]."
             with st.spinner("Agent is thinking..."):
                 try:
-                    response = run_study_agent(st.session_state.agent_query)
-                    st.session_state.agent_response = response
+                    r = run_study_agent(q)
+                    st.session_state.agent_response = r
+                    st.session_state.agent_query = q
+                    st.session_state.agent_history.append((q, r))
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Agent error: {e}")
-            st.rerun()
-    with col2:
-        if st.button("🔍 Search notes", use_container_width=True, key="example_search"):
-            st.session_state.agent_query = "Cherche le mot RAG dans mes notes."
+
+        if st.button("🔍 Search notes: RAG", use_container_width=True, key="example_search"):
+            q = "Cherche le mot RAG dans mes notes."
             with st.spinner("Agent is thinking..."):
                 try:
-                    response = run_study_agent(st.session_state.agent_query)
-                    st.session_state.agent_response = response
+                    r = run_study_agent(q)
+                    st.session_state.agent_response = r
+                    st.session_state.agent_query = q
+                    st.session_state.agent_history.append((q, r))
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Agent error: {e}")
-            st.rerun()
-    with col3:
-        if st.button("📚 Revision plan", use_container_width=True, key="example_revision"):
-            st.session_state.agent_query = "Prépare-moi un plan de révision sur les agents IA."
+
+        if st.button("📚 Revision plan: AI", use_container_width=True, key="example_revision"):
+            q = "Prépare-moi un plan de révision sur les agents IA."
             with st.spinner("Agent is thinking..."):
                 try:
-                    response = run_study_agent(st.session_state.agent_query)
-                    st.session_state.agent_response = response
+                    r = run_study_agent(q)
+                    st.session_state.agent_response = r
+                    st.session_state.agent_query = q
+                    st.session_state.agent_history.append((q, r))
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Agent error: {e}")
-            st.rerun()
+
+    with right_col:
+        st.markdown("### Response")
+        if st.session_state.agent_response:
+            st.markdown(
+                f"<div class='info-box'>{st.session_state.agent_response}</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown("---")
+            st.markdown("**Copy Response**")
+            st.text_area(
+                "Response text:",
+                value=st.session_state.agent_response,
+                height=140,
+                label_visibility="collapsed",
+                disabled=True,
+            )
+        else:
+            st.info("No response yet. Ask a question or select a quick example.")
+
+        st.markdown("---")
+        st.markdown("### History")
+        if st.session_state.agent_history:
+            for idx, (q, r) in enumerate(reversed(st.session_state.agent_history[-12:]), start=1):
+                with st.expander(f"{idx}. {q[:50]}..."):
+                    st.markdown(f"**Q:** {q}")
+                    st.markdown(f"**A:** {r}")
+        else:
+            st.write("No history yet.")
