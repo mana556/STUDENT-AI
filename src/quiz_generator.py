@@ -1,9 +1,14 @@
 ﻿import json
 import re
 
+def generate_quiz(context, llm, topic=None):
+    MAX_CONTEXT_LENGTH = 4000  # Reduced to avoid 413 errors
 
-def generate_quiz(context, llm):
-    prompt = f"""Create 10 multiple choice questions based on:
+    # Truncate context if too long
+    if len(context) > MAX_CONTEXT_LENGTH:
+        context = context[:MAX_CONTEXT_LENGTH] + "... [truncated]"
+
+    prompt = f"""Create 10 multiple choice questions on {topic if topic else "the provided text"} based on:
 
 {context}
 
