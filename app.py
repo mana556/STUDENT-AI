@@ -11,22 +11,44 @@ from agent_etudiant_tp import run_agent as run_study_agent
 
 st.set_page_config(page_title="AI Student Assistant", page_icon="🎓", layout="wide")
 
-st.markdown(
-    """
-    <style>
-    .stApp { background: linear-gradient(180deg, #eef2ff 0%, #ffffff 100%); }
-    .stButton>button { background-color: #4b7bec; color: white; border-radius: 8px; border: none; font-weight: 500; transition: all 0.2s ease; }
-    .stButton>button:hover { background-color: #3867d6; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(75, 123, 236, 0.3); }
-    .stTextInput>div>div>input { border-radius: 12px; border: 1px solid #d0d7ff; padding: 10px; }
-    .stTextArea>div>div>textarea { border-radius: 12px; border: 1px solid #d0d7ff; padding: 10px; }
-    .stFileUploader>div { border-radius: 16px; border: 2px dashed #a3b1ff; background: #f5f7ff; padding: 16px; }
-    .info-box { background: #f0f4ff; border-left: 4px solid #4b7bec; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
-    .subtitle-text { color: #4b5563; font-size: 16px; margin-top: -8px; margin-bottom: 20px; }
-    .css-1d391kg { box-shadow: 0 10px 30px rgba(15, 23, 70, 0.08); }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# Initialize theme in session state
+if "app_theme" not in st.session_state:
+    st.session_state.app_theme = "light"
+
+def get_theme_css(theme: str) -> str:
+    """Return CSS based on theme selection."""
+    if theme == "dark":
+        return """
+        <style>
+        .stApp { background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%); color: #e0e0e0; }
+        .stButton>button { background-color: #00d4ff; color: #1a1a2e; border-radius: 8px; border: none; font-weight: 600; transition: all 0.2s ease; }
+        .stButton>button:hover { background-color: #00b8d4; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4); }
+        .stTextInput>div>div>input { border-radius: 12px; border: 1px solid #00d4ff; padding: 10px; background: #0f3460; color: #e0e0e0; }
+        .stTextArea>div>div>textarea { border-radius: 12px; border: 1px solid #00d4ff; padding: 10px; background: #0f3460; color: #e0e0e0; }
+        .stFileUploader>div { border-radius: 16px; border: 2px dashed #00d4ff; background: #0f3460; padding: 16px; }
+        .info-box { background: #0f3460; border-left: 4px solid #00d4ff; border-radius: 6px; padding: 12px 16px; margin: 8px 0; color: #e0e0e0; }
+        .subtitle-text { color: #a0a0a0; font-size: 16px; margin-top: -8px; margin-bottom: 20px; }
+        .stExpander { border-radius: 8px; border: 1px solid #00d4ff; background: #0f3460; }
+        h1, h2, h3 { color: #00d4ff; }
+        </style>
+        """
+    else:  # light mode
+        return """
+        <style>
+        .stApp { background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 100%); color: #1a1a1a; }
+        .stButton>button { background-color: #4b7bec; color: white; border-radius: 8px; border: none; font-weight: 600; transition: all 0.2s ease; }
+        .stButton>button:hover { background-color: #3867d6; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(75, 123, 236, 0.3); }
+        .stTextInput>div>div>input { border-radius: 12px; border: 2px solid #d0d7ff; padding: 10px; background: #fafbff; color: #1a1a1a; }
+        .stTextArea>div>div>textarea { border-radius: 12px; border: 2px solid #d0d7ff; padding: 10px; background: #fafbff; color: #1a1a1a; }
+        .stFileUploader>div { border-radius: 16px; border: 2px dashed #a3b1ff; background: #f5f7ff; padding: 16px; }
+        .info-box { background: #f0f4ff; border-left: 4px solid #4b7bec; border-radius: 6px; padding: 12px 16px; margin: 8px 0; color: #1a1a1a; }
+        .subtitle-text { color: #4b5563; font-size: 16px; margin-top: -8px; margin-bottom: 20px; }
+        .stExpander { border-radius: 8px; border: 1px solid #d0d7ff; background: #fafbff; }
+        h1, h2, h3 { color: #2d3748; }
+        </style>
+        """
+
+st.markdown(get_theme_css(st.session_state.app_theme), unsafe_allow_html=True)
 
 st.title("🎓 AI Student Assistant")
 
@@ -88,9 +110,19 @@ def build_quiz_context(chunks, max_total_chars=400, max_chunks=1, max_chars_per_
     return ""
 
 
-# SIDEBAR: PDF Upload
+# SIDEBAR: PDF Upload & Theme Toggle
 with st.sidebar:
-    st.subheader("📄 Document Upload")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.subheader("📄 Document Upload")
+    with col2:
+        theme_icon = "🌙" if st.session_state.app_theme == "light" else "☀️"
+        if st.button(theme_icon, key="theme_toggle", help="Toggle theme"):
+            st.session_state.app_theme = "dark" if st.session_state.app_theme == "light" else "light"
+            st.rerun()
+    
+    st.markdown(f"**Theme:** {st.session_state.app_theme.capitalize()}")
+    st.markdown("---")
     
     # Vector store selector
     st.session_state.store_type = st.radio(
